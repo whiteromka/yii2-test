@@ -1,0 +1,57 @@
+version: '3.9'
+
+services:
+  nginx:
+    build: ./docker/nginx
+    ports:
+      - "80:80"
+    volumes:
+      - .:/var/www/html
+    depends_on:
+      - php
+    networks:
+      - yii2
+
+  php:
+    build:
+      context: ./docker/php
+      args:
+        UID: ${UID:-1000}
+        GID: ${GID:-1000}
+    volumes:
+      - .:/var/www/html
+      - ./docker/php/www.conf:/usr/local/etc/php-fpm.d/www.conf
+    environment:
+      PHP_IDE_CONFIG: "serverName=yii2-test"
+      XDEBUG_MODE: debug,develop
+      XDEBUG_CONFIG: client_host=host.docker.internal client_port=9003
+    depends_on:
+      pgsql:
+        condition: service_healthy
+    networks:
+      - yii2
+
+  pgsql:
+    image: postgres:16
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: loans
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - yii2
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U user -d loans" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
+
+networks:
+  yii2:
+    driver: bridge
