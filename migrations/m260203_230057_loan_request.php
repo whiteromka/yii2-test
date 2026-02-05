@@ -20,6 +20,12 @@ class m260203_230057_loan_request extends Migration
         $this->execute("
             CREATE INDEX idx_loan_request_user_status ON loan_request (user_id, status)
         ");
+
+        $this->execute("
+            CREATE UNIQUE INDEX ux_loan_request_user_approved
+            ON loan_request (user_id)
+            WHERE status = 'approved'
+        ");
     }
 
     public function safeDown()

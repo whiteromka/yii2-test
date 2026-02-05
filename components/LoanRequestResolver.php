@@ -5,6 +5,7 @@ namespace app\components;
 use app\models\LoanRequest;
 use Throwable;
 use Yii;
+use yii\db\IntegrityException;
 
 class LoanRequestResolver
 {
@@ -73,31 +74,22 @@ class LoanRequestResolver
         $transaction = Yii::$app->db->beginTransaction();
         try {
             if ($approved) {
-                $exists = Yii::$app->db->createCommand("
-                    SELECT id
-                    FROM loan_request
-                    WHERE user_id = :user_id
-                      AND status = :status
-                    LIMIT 1
-                    FOR UPDATE
-                ", [
-                    ':user_id' => $model->user_id,
-                    ':status' => LoanRequest::STATUS_APPROVED
-                ])->queryOne();
-
-                if ($exists) {
-                    $approved = false;
-                }
+                $model->status = LoanRequest::STATUS_APPROVED;
+            } else {
+                $model->status = LoanRequest::STATUS_DECLINED;
             }
-
-            $model->status = $approved ? LoanRequest::STATUS_APPROVED : LoanRequest::STATUS_DECLINED;
             $model->processed_at = date('Y-m-d H:i:s');
-            $model->save(false);
+            $model->save();
 
             $transaction->commit();
-        } catch (Throwable $e) {
+        } catch (IntegrityException $e) {
+            // если два job-а параллельно решили approved для разных заявок одного поль-ля
             $transaction->rollBack();
-            throw $e;
+
+            $model->updateAttributes([
+                'status' => LoanRequest::STATUS_DECLINED,
+                'processed_at' => date('Y-m-d H:i:s'),
+            ]);
         }
     }
 }
